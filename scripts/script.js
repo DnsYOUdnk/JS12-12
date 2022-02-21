@@ -9,7 +9,7 @@ class User {
     }
 
     set editUser(data) {
-        Object.assign(this.data, data)
+        this.data = {...this.data, ...data};
     }
 
     get informUser() {
@@ -19,26 +19,27 @@ class User {
 
 class Contacts {
     constructor() {
-        this.contactsData = [];
+        this.contactsData = this.getContactsData();
     }
 
-    add({id, name, phone, email, address}) {
+    getContactsData() {
+        let data = (localStorage.getItem('contactsBookData') && document.cookie) ? JSON.parse(localStorage.getItem('contactsBookData')) : [];
+        if(data.length > 0) {
+            data = data.map(({data}) => new User(data))
+            return data
+        }
+        return data
+    }
+
+    add({name, phone, email, address}) {
         const user = new User({
-                id: !id ? Date.now() : id,
+                id: Date.now(),
                 name,
                 phone,
                 email,
                 address,
             });
-
         this.contactsData.push(user)
-    }
-
-    changeFlagMode(idContact,newEditMode) {
-        const userFound = this.contactsData.find(({data:{id}}) => id == idContact);
-        if(!userFound) return;
-
-        userFound.changeFlag(newEditMode);
     }
 
     edit(idContact, editContactData) {
@@ -75,16 +76,16 @@ class ContactsApp extends Contacts{
         this.addNewContactBtn;
         this.clearAllContactsBtn;
         this.listContacts;
-
         this.createHTML();
         this.addEvent();
+        this.onShowContacts();
     }
 
     createHTML() {
         const appContacts = document.createElement('div')
               appContacts.classList.add('app__contacts');
-        const inputFieldContact = document.createElement('div')
-              inputFieldContact.classList.add('contacts__input_field', 'container');
+        const entryFieldContact = document.createElement('div')
+              entryFieldContact.classList.add('contacts__input_field', 'container');
         this.listContacts = document.createElement('div')
             this.listContacts.classList.add('contacts__list', 'container');
         
@@ -111,15 +112,15 @@ class ContactsApp extends Contacts{
         const appContactsTitle = document.createElement('h1');
               appContactsTitle.innerText = 'Contact book';
 
-        inputFieldContact.append(appContactsTitle, this.inputUserName, this.inputUserPhone, this.inputUserEmail, this.inputUserAddress, this.addNewContactBtn, this.clearAllContactsBtn);
+        entryFieldContact.append(appContactsTitle, this.inputUserName, this.inputUserPhone, this.inputUserEmail, this.inputUserAddress, this.addNewContactBtn, this.clearAllContactsBtn);
 
-        appContacts.append(inputFieldContact, this.listContacts);
+        appContacts.append(entryFieldContact, this.listContacts);
         document.body.appendChild(appContacts);
     }
 
     addEvent() {
         this.addNewContactBtn.addEventListener('click', () => {
-            let contactsData = this.get().contactsData
+            let contactsData = this.get().contactsData;
             contactsData.forEach(item => {
                 item.editMode = false;
             })
@@ -158,6 +159,15 @@ class ContactsApp extends Contacts{
 
     onShowContacts() {
         const contactsData = this.get().contactsData;
+        localStorage.setItem('contactsBookData', JSON.stringify(contactsData));
+        let date = new Date(Date.now() + 20000)
+            date = date.toUTCString();
+        if(contactsData.length > 0) {
+            document.cookie = 'storageExpiration=true; expires=' + date;
+        } else {
+            document.cookie = 'storageExpiration=true; max-age=-1'
+        };
+
         let ul = document.querySelector('.contacts__items')
         if(!ul){
             ul = document.createElement('ul');
@@ -171,10 +181,10 @@ class ContactsApp extends Contacts{
             
                 list += `<li class="contact__item">
                             <div class="contact__item__view">
-                                <p><span>Name:</span>    <input class="contact__item__input input__name" data-name="${id}" ${editMode ? '' : 'disabled'} value=${name}></p>  
-                                <p><span>Phone:</span>   <input class="contact__item__input input__phone" data-phone="${id}" ${editMode ? '' : 'disabled'}  value=${phone}></p>
-                                <p><span>E-mail:</span>  <input class="contact__item__input input__email" data-email="${id}" ${editMode ? '' : 'disabled'}  value=${email}></p>    
-                                <p><span>Address:</span> <input class="contact__item__input input__address" data-address="${id}" ${editMode ? '' : 'disabled'}  value=${address}></p>
+                                <p><span>Name:</span>    <input type="text" class="contact__item__input input__name" data-name="${id}" ${editMode ? '' : 'disabled'} value="${name || "No contact information"}"></p>  
+                                <p><span>Phone:</span>   <input type="text" class="contact__item__input input__phone" data-phone="${id}" ${editMode ? '' : 'disabled'}  value="${phone || "No contact information"}"></p>
+                                <p><span>E-mail:</span>  <input type="text" class="contact__item__input input__email" data-email="${id}" ${editMode ? '' : 'disabled'}  value="${email || "No contact information"}"></p>    
+                                <p><span>Address:</span> <input type="text" class="contact__item__input input__address" data-address="${id}" ${editMode ? '' : 'disabled'}  value="${address || "No contact information"}"></p>
                             </div>
                             <div class="contact__item__btns">
                                 ${editMode ? "<button class='contact__item__save' data-save="+id+" data-mode='false'>Save</button>" : "<button class='contact__item__delete' data-delete="+id+">Delete</button>"}
@@ -185,10 +195,6 @@ class ContactsApp extends Contacts{
 
         ul.innerHTML = list;
         this.listContacts.appendChild(ul);
-        
-        let jsonContactsData = JSON.stringify(contactsData)
-        localStorage.setItem('contactsBookData', jsonContactsData);
-
         this.onAddEventRemoveEdit();
     }
 
@@ -207,19 +213,16 @@ class ContactsApp extends Contacts{
                   })
               })
 
-        const cancelContactBtns = document.querySelectorAll('.contact__item__cancel');
-              cancelContactBtns.forEach(cancelBtn => {
-                cancelBtn.addEventListener('click', (event) => {
+        const cancelContactBtn = document.querySelector('.contact__item__cancel');
+              if(!cancelContactBtn) return;
+              cancelContactBtn.addEventListener('click', (event) => {
                       this.onEditModeContact(event.target.dataset.cancel, event.target.dataset.mode)
-                  })
               })
 
-        const saveContactBtns = document.querySelectorAll('.contact__item__save');
-              saveContactBtns.forEach(saveBtn => {
-                saveBtn.addEventListener('click', (event) => {
-                      this.onSaveContactChanges(event.target.dataset.save);
-                      this.onEditModeContact(event.target.dataset.save, event.target.dataset.mode)
-                  })
+        const saveContactBtn = document.querySelector('.contact__item__save');
+              if(!saveContactBtn) return;
+              saveContactBtn.addEventListener('click', (event) => {
+                      this.onSaveContactChanges(event.target.dataset.save, event.target.dataset.mode);
               })
     }
 
@@ -230,11 +233,20 @@ class ContactsApp extends Contacts{
 
     onEditModeContact(idContactEdit, newEditMode) {
         let editMode = newEditMode == 'true';
-        this.changeFlagMode(idContactEdit,editMode)
+        const data = this.get().contactsData;
+        const editUsers = data.map((item) => {
+            if(item.data.id == idContactEdit) {
+                item.editMode = editMode;
+            } else {
+                item.editMode = false;
+            }
+            return item;
+        })
+        this.get().contactsData = editUsers;
         this.onShowContacts()
     }
 
-    onSaveContactChanges(idContactEdit) {
+    onSaveContactChanges(idContactEdit, newEditMode) {
         const inputName = document.querySelector(`input[data-name="${idContactEdit}"]`);
         const inputPhone = document.querySelector(`input[data-phone="${idContactEdit}"]`);
         const inputEmail = document.querySelector(`input[data-email="${idContactEdit}"]`);
@@ -245,8 +257,8 @@ class ContactsApp extends Contacts{
             email: inputEmail.value,
             address: inputAddress.value
         };
-        this.edit(idContactEdit, editUser)
-        this.onShowContacts()
+        this.edit(idContactEdit, editUser);
+        this.onEditModeContact(idContactEdit, newEditMode);
     }
 
     get() {
@@ -256,13 +268,4 @@ class ContactsApp extends Contacts{
 
 window.addEventListener('load', () => {
     const contactBook = new ContactsApp()
-    const saveData = JSON.parse(localStorage.getItem('contactsBookData'));
-    if(!saveData) {
-        return
-    } else {
-        saveData.forEach(item => {
-        contactBook.add(item.data)
-    })
-    contactBook.onShowContacts()
-    }
 })
